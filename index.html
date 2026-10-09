@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Dashboard IoT Nông Nghiệp Thông Minh - Giám sát cảm biến, phân tích môi trường cây trồng và điều khiển thiết bị nhà kính theo thời gian thực.">
+  <title>Smart Farm IoT – Giám Sát Nông Nghiệp Thông Minh</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Áp dụng theme đã lưu TRƯỚC KHI render, tránh nhấp nháy -->
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem('iot_theme') === 'light') {
+          document.documentElement.classList.add('light-mode');
+        }
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- ===== HEADER ===== -->
+    <header class="top-nav">
+      <div class="nav-brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a9 9 0 0 1 9 9c0 4.97-4.03 9-9 9A9 9 0 0 1 3 11a9 9 0 0 1 9-9z"/>
+            <path d="M12 7v5l3 3"/>
+            <path d="M7 16c2-1 5-1 7 0"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">AgriTech IoT</h1>
+          <p class="brand-subtitle">Trạm Quan Trắc &bull; Nhà Kính Số 01 (Dưa Lưới CNC)</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Đồng hồ cập nhật 6s -->
+        <div class="sync-status-box" id="syncStatusBox">
+          <div class="live-dot"></div>
+          <div class="sync-info">
+            <span class="sync-text">Cập nhật sau: <strong id="countdownTimer">6s</strong></span>
+            <div class="progress-track">
+              <div class="progress-bar" id="syncProgressBar"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trạng thái hệ thống -->
+        <div class="system-badge normal" id="systemHealthBadge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+          <span id="systemStatusText">Hệ Thống Bình Thường</span>
+        </div>
+
+        <!-- Nút Dark / Light Mode -->
+        <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" title="Chuyển chế độ Sáng / Tối">
+          <!-- Sun icon: hiển thị khi đang Dark mode -->
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+          </svg>
+          <!-- Moon icon: hiển thị khi đang Light mode -->
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          <span id="themeLabel">Chế độ Sáng</span>
+        </button>
+
+        <!-- Nút Làm Mới -->
+        <button class="btn-refresh" id="manualRefreshBtn" title="Làm mới dữ liệu ngay">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/>
+          </svg>
+          <span>Làm Mới</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ===== MAIN ===== -->
+    <main class="dashboard-main">
+      <!-- Sensor Cards -->
+      <section class="section-container">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <h2 class="section-title">Chỉ Số Môi Trường &amp; Đất Trồng</h2>
+            <span class="update-time" id="lastUpdatedLabel">Cập nhật lần cuối: --:--:--</span>
+          </div>
+          <div class="sensor-count-badge">6 Cảm biến hoạt động</div>
+        </div>
+
+        <div class="metrics-grid">
+          <!-- Card 1: Nhiệt Độ -->
+          <article class="metric-card">
+            <div class="card-top">
+              <div class="metric-icon-box temp-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+                </svg>
+              </div>
+              <span class="status-pill optimal" id="tempStatus">Tối ưu</span>
+            </div>
+            <div class="card-body">
+              <span class="metric-label">Nhiệt Độ Không Khí</span>
+              <div class="metric-val-wrap">
+                <span class="metric-value" id="valTemp">28.5</span>
+                <span class="metric-unit">°C</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <div class="metric-range-bar"><div class="metric-range-fill" id="tempBar" style="width:58%"></div></div>
+              <div class="range-labels">
+                <span>Ngưỡng: 22°C – 32°C</span>
+                <span class="delta-tag" id="tempDelta">+0.2°C</span>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 2: Độ Ẩm Không Khí -->
+          <article class="metric-card">
+            <div class="card-top">
+              <div class="metric-icon-box hum-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                </svg>
+              </div>
+              <span class="status-pill optimal" id="humidityStatus">Lý tưởng</span>
+            </div>
+            <div class="card-body">
+              <span class="metric-label">Độ Ẩm Không Khí</span>
+              <div class="metric-val-wrap">
+                <span class="metric-value" id="valHumidity">68.2</span>
+                <span class="metric-unit">%RH</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <div class="metric-range-bar"><div class="metric-range-fill" id="humidityBar" style="width:68%"></div></div>
+              <div class="range-labels">
+                <span>Ngưỡng: 60% – 80%</span>
+                <span class="delta-tag" id="humDelta">-0.4%</span>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 3: Độ Ẩm Đất -->
+          <article class="metric-card">
+            <div class="card-top">
+              <div class="metric-icon-box soil-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 20h18M3 16h18M5 12c1.5-2 3.5-3 7-3s5.5 1 7 3"/>
+                  <path d="M12 3v6"/>
+                </svg>
+              </div>
+              <span class="status-pill optimal" id="soilStatus">Đủ ẩm</span>
+            </div>
+            <div class="card-body">
+              <span class="metric-label">Độ Ẩm Của Đất</span>
+              <div class="metric-val-wrap">
+                <span class="metric-value" id="valSoil">62.8</span>
+                <span class="metric-unit">%</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <div class="metric-range-bar"><div class="metric-range-fill" id="soilBar" style="width:62%"></div></div>
+              <div class="range-labels">
+                <span>Ngưỡng: 50% – 75%</span>
+                <span class="delta-tag" id="soilDelta">+0.5%</span>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 4: Ánh Sáng -->
+          <article class="metric-card">
+            <div class="card-top">
+              <div class="metric-icon-box light-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="5"/>
+                  <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                  <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                </svg>
+              </div>
+              <span class="status-pill optimal" id="lightStatus">Đủ sáng</span>
+            </div>
+            <div class="card-body">
+              <span class="metric-label">Cường Độ Ánh Sáng</span>
+              <div class="metric-val-wrap">
+                <span class="metric-value" id="valLight">34,500</span>
+                <span class="metric-unit">Lux</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <div class="metric-range-bar"><div class="metric-range-fill" id="lightBar" style="width:69%"></div></div>
+              <div class="range-labels">
+                <span>Quang hợp: 25k – 45k Lux</span>
+                <span class="delta-tag" id="lightDelta">+120 Lux</span>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 5: pH -->
+          <article class="metric-card">
+            <div class="card-top">
+              <div class="metric-icon-box ph-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10 2v7.31M14 2v7.31"/>
+                  <path d="M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0"/>
+                </svg>
+              </div>
+              <span class="status-pill optimal" id="phStatus">Cân bằng</span>
+            </div>
+            <div class="card-body">
+              <span class="metric-label">Độ pH Của Đất</span>
+              <div class="metric-val-wrap">
+                <span class="metric-value" id="valPh">6.45</span>
+                <span class="metric-unit">pH</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <div class="metric-range-bar"><div class="metric-range-fill" id="phBar" style="width:64%"></div></div>
+              <div class="range-labels">
+                <span>Mức chuẩn: 6.0 – 7.0 pH</span>
+                <span class="delta-tag" id="phDelta">-0.05</span>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 6: EC -->
+          <article class="metric-card">
+            <div class="card-top">
+              <div class="metric-icon-box ec-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+              </div>
+              <span class="status-pill optimal" id="ecStatus">Đạt chuẩn</span>
+            </div>
+            <div class="card-body">
+              <span class="metric-label">Dinh Dưỡng Đất (EC)</span>
+              <div class="metric-val-wrap">
+                <span class="metric-value" id="valEc">1.62</span>
+                <span class="metric-unit">mS/cm</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <div class="metric-range-bar"><div class="metric-range-fill" id="ecBar" style="width:65%"></div></div>
+              <div class="range-labels">
+                <span>Tiêu chuẩn: 1.2 – 2.2 mS/cm</span>
+                <span class="delta-tag" id="ecDelta">+0.03</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- Đồ thị + Điều khiển -->
+      <div class="two-column-layout">
+        <!-- Biểu đồ Canvas -->
+        <section class="section-card chart-card">
+          <div class="chart-header">
+            <div>
+              <h3 class="card-heading">Biến Thiên Thời Gian Thực (Mỗi 6 Giây)</h3>
+              <p class="card-desc">Lịch sử Nhiệt Độ &amp; Độ Ẩm trong 10 chu kỳ gần nhất</p>
+            </div>
+            <div class="chart-legends">
+              <div class="legend-item"><span class="legend-color legend-temp"></span><span>Nhiệt độ (°C)</span></div>
+              <div class="legend-item"><span class="legend-color legend-humidity"></span><span>Độ ẩm (%)</span></div>
+            </div>
+          </div>
+          <div class="canvas-wrapper">
+            <canvas id="realtimeChart"></canvas>
+          </div>
+          <div class="chart-bottom-info">
+            <span>Đang lưu: 10 chu kỳ đo gần nhất</span>
+            <span class="chart-pulse-badge">Tự động vẽ lại sau mỗi 6s</span>
+          </div>
+        </section>
+
+        <!-- Sidebar -->
+        <div class="side-column">
+          <!-- Điều khiển thiết bị -->
+          <section class="section-card">
+            <div class="card-header-clean">
+              <h3 class="card-heading">Điều Khiển Thiết Bị</h3>
+              <span class="mode-badge">Chế độ: Tự Động</span>
+            </div>
+            <div class="controls-list">
+              <div class="device-row">
+                <div class="device-info">
+                  <div class="device-icon pump-dev">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <span class="device-name">Máy Bơm Tưới Nhỏ Giọt</span>
+                    <span class="device-status-txt" id="txtPump">Đang TẮT</span>
+                  </div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="switchPump" onchange="toggleDevice('pump',this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="device-row">
+                <div class="device-info">
+                  <div class="device-icon fan-dev">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="3"/>
+                      <path d="M12 9a3 3 0 0 0-3-3H6a3 3 0 0 0 0 6h3"/>
+                      <path d="M15 12a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v3"/>
+                      <path d="M12 15a3 3 0 0 0 3 3h3a3 3 0 0 0 0-6h-3"/>
+                      <path d="M9 12a3 3 0 0 0-3 3v3a3 3 0 0 0 6 0v-3"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <span class="device-name">Quạt Thông Gió Đối Lưu</span>
+                    <span class="device-status-txt active" id="txtFan">Đang BẬT (Cấp 2)</span>
+                  </div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="switchFan" checked onchange="toggleDevice('fan',this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="device-row">
+                <div class="device-info">
+                  <div class="device-icon mist-dev">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 15h18M3 19h18M5 11c1-1 2-2 4-2s3 1 4 2 2 2 4 2 3-1 4-2"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <span class="device-name">Hệ Phun Sương Hạ Nhiệt</span>
+                    <span class="device-status-txt" id="txtMist">Đang TẮT</span>
+                  </div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="switchMist" onchange="toggleDevice('mist',this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="device-row">
+                <div class="device-info">
+                  <div class="device-icon led-dev">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.5 1.5 4.5 3 6h8c1.5-1.5 3-3.5 3-6a7 7 0 0 0-7-7z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <span class="device-name">Đèn LED Quang Hợp</span>
+                    <span class="device-status-txt active" id="txtLed">Đang BẬT (Auto)</span>
+                  </div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="switchLed" checked onchange="toggleDevice('led',this.checked)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <!-- Nhật ký -->
+          <section class="section-card">
+            <div class="card-header-clean">
+              <h3 class="card-heading">Nhật Ký Sự Kiện IoT</h3>
+              <span class="log-badge">Live feed</span>
+            </div>
+            <ul class="activity-logs" id="activityLogsList"></ul>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <footer class="app-footer">
+      <p>&copy; 2026 Smart Agriculture IoT Station &mdash; Cập nhật tự động mỗi 6 giây.</p>
+    </footer>
+  </div>
+
+  <!-- ===== SCRIPT CHUYỂN THEME (inline, không phụ thuộc cache) ===== -->
+  <script>
+    function toggleTheme() {
+      var html = document.documentElement;
+      var isLight = html.classList.toggle('light-mode');   // bật/tắt trên <html>
+
+      // Cập nhật nhãn & icon
+      var lbl = document.getElementById('themeLabel');
+      if (lbl) lbl.textContent = isLight ? 'Chế độ Tối' : 'Chế độ Sáng';
+
+      // Lưu trạng thái
+      try { localStorage.setItem('iot_theme', isLight ? 'light' : 'dark'); } catch(e){}
+
+      // Vẽ lại chart (nếu đã sẵn sàng)
+      if (typeof drawRealtimeChart === 'function') drawRealtimeChart();
+
+      // Log sự kiện
+      if (typeof addActivityLog === 'function')
+        addActivityLog('Chuyển sang ' + (isLight ? 'Chế độ Sáng ☀️' : 'Chế độ Tối 🌙'), 'normal');
+    }
+  </script>
+
+  <!-- ===== LOGIC IoT (cập nhật cảm biến, chart, thiết bị) ===== -->
+  <script src="javascript.js"></script>
+</body>
+</html>
